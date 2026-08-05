@@ -1,0 +1,69 @@
++        run_directory = database_path.parent
++        combined_loaded_var.set("SCANNING DIRECT FILENAMES…")
++        table_status_var.set(f"Scanning direct child directories: {run_directory}")
++        combined_directory_var.set(run_directory.name)
++
++        if database_path.is_file():
++            try:
++                version = load_combined_version(database_path)
++            except sqlite3.Error:
++                version = "unreadable SQL ledger"
++        else:
++            version = "live directory · no SQL ledger"
++        filename_var.set(f"{run_directory.name}  ·  {version}")
+         run_counter_var.set(
+             f"Combined run {combined_index + 1} of {len(combined_databases)}"
+         )
++
+         try:
+-            pairing_count, moved_count, shared_count = populate_combined_gallery(database_path)
+-        except (OSError, sqlite3.Error, json.JSONDecodeError) as exc:
++            pairing_count, direct_file_count, _shared_count = populate_combined_gallery(
++                database_path
++            )
++        except (OSError, ValueError) as exc:
+             messagebox.showerror(
+-                "Could not read combined table",
+-                f"{database_path}\n\n{exc}",
++                "Could not scan combined directory",
++                f"{run_directory}\n\n{exc}",
+                 parent=root,
+             )
+             clear_gallery(combined_gallery)
+-            table_status_var.set("This combined manifest could not be displayed.")
++            combined_loaded_var.set("SCAN FAILED")
++            table_status_var.set("This Combined directory could not be displayed.")
+         else:
+-            shared_text = (
+-                f" · {shared_count} shared files"
+-                if shared_count
+-                else ""
+-            )
+             table_status_var.set(
+-                f"{pairing_count} live pairing directories · {moved_count} direct files"
+-                f"{shared_text} · LIVE: {database_path.parent}"
++                f"{pairing_count} direct pairing directories · "
++                f"{direct_file_count} direct files · LIVE: {run_directory}"
+             )
+ 
+-        if combined_index <= 0:
+-            older_button.state(["disabled"])
+-        else:
+-            older_button.state(["!disabled"])
+-        if combined_index >= len(combined_databases) - 1:
+-            newer_button.state(["disabled"])
++        older_button.state(["disabled"] if combined_index <= 0 else ["!disabled"])
++        newer_button.state(
++            ["disabled"]
++            if combined_index >= len(combined_databases) - 1
++            else ["!disabled"]
++        )
++        if database_path.is_file():
++            open_database_button.state(["!disabled"])
+         else:
+-            newer_button.state(["!disabled"])
+-        open_database_button.state(["!disabled"])
++            open_database_button.state(["disabled"])
+         submit_button.state(["disabled"])
+         search_button.state(["disabled"])
+         search_entry.state(["disabled"])
