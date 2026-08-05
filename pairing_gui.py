@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Doku Doujins Pairing Gallery v31.0.
+"""Doku Doujins Pairing Gallery v32.0.
 
 The readable implementation is stored as compressed payload chunks beside this
 launcher. Use ``--dump-source PATH`` to write one standalone readable script.
@@ -12,8 +12,9 @@ import hashlib
 import sys
 from pathlib import Path
 
-APP_VERSION = "31.0"
+APP_VERSION = "32.0"
 _SOURCE_SHA256 = "af0b416c33edf52e2cbb0e33efc44bbd83677eefd5fec28ef03cee99bec411db"
+_EXPORT_HELPER_SHA256 = "f08beca4d9bdcc6ec9e44a3ec8138f8cf64ebd915fc087c2ca609fb7ca962930"
 
 
 def _read_embedded_source() -> str:
@@ -31,21 +32,34 @@ def _read_embedded_source() -> str:
     return source_bytes.decode("utf-8")
 
 
+def _read_export_helper_source() -> str:
+    payload = (
+        Path(__file__).resolve().parent
+        / ".payload-table3-v2"
+        / "source.b64"
+    )
+    encoded = payload.read_text(encoding="ascii").strip()
+    source_bytes = bz2.decompress(base64.b64decode(encoded))
+    actual = hashlib.sha256(source_bytes).hexdigest()
+    if actual != _EXPORT_HELPER_SHA256:
+        raise RuntimeError(f"Table 3 export helper checksum mismatch: {actual}")
+    return source_bytes.decode("utf-8")
+
+
 def _replace_once(source: str, old: str, new: str, label: str) -> str:
     if old not in source:
-        raise RuntimeError(f"v31 source patch target not found: {label}")
+        raise RuntimeError(f"v32 source patch target not found: {label}")
     return source.replace(old, new, 1)
 
 
 def _read_patched_source() -> str:
-    """Apply the lightweight Table 3 fixes and v31 ingest-export workflow."""
+    """Apply the lightweight Table 3 fixes and v32 ingest-export workflow."""
     source = _read_embedded_source()
-    source = source.replace('APP_VERSION = "30.0"', 'APP_VERSION = "31.0"', 1)
+    source = source.replace('APP_VERSION = "30.0"', 'APP_VERSION = "32.0"', 1)
     source = source.replace("pady=(-8, 10)", "pady=(0, 10)")
     source = source.replace("pady=(-8,10)", "pady=(0, 10)")
 
-    helper_path = Path(__file__).resolve().parent / "table3_ingest_export.py"
-    helper_source = helper_path.read_text(encoding="utf-8")
+    helper_source = _read_export_helper_source()
     source = _replace_once(
         source,
         "\ndef choose_gui_font_family() -> str:\n",
@@ -125,13 +139,14 @@ def _read_patched_source() -> str:
             table_status_var.set(f"Table 3 export failed: {exc}")
         else:
             combined_loaded_var.set(
-                f"EXPORTED {work_count} WORK{'S' if work_count != 1 else ''}"
+                f"EXPORTED {work_count} WORK{'S' if work_count != 1 else ''} · SCHEMA V2"
             )
             table_status_var.set(
                 f"Exported {work_count} ingest-ready work rows to {sqlite_path}"
             )
             messagebox.showinfo(
                 "Table 3 export complete",
+                f"Schema: v2\n"
                 f"Works exported: {work_count}\n\n"
                 f"SQLite:\n{sqlite_path}\n\n"
                 f"SQL dump:\n{sql_path}\n\n"
@@ -193,7 +208,7 @@ def _read_patched_source() -> str:
 
 if __name__ == "__main__" and len(sys.argv) >= 2 and sys.argv[1] == "--dump-source":
     destination = Path(
-        sys.argv[2] if len(sys.argv) >= 3 else "pairing_gui_v31_source.py"
+        sys.argv[2] if len(sys.argv) >= 3 else "pairing_gui_v32_source.py"
     )
     destination.write_text(_read_patched_source(), encoding="utf-8")
     print(destination.resolve())
