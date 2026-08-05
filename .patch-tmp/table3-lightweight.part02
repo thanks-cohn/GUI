@@ -1,0 +1,160 @@
+-        title, source_url = _read_json_title_url(primary_json)
+-        related_files = [
+-            str(path)
+-            for path in direct_files
+-            if path not in {primary_archive, primary_json}
+-        ]
+-        moved_files = [str(primary_archive), str(primary_json), *related_files]
+-        source_archive = str(
+-            chosen_old.get("source_archive")
+-            or ledger_source_by_destination.get(str(primary_archive), "")
+-        )
+-        source_json = str(
+-            chosen_old.get("source_json")
+-            or ledger_source_by_destination.get(str(primary_json), "")
+-        )
+-        try:
+-            match_percent = float(chosen_old.get("match_percent") or 0.0)
+-        except (TypeError, ValueError):
+-            match_percent = 0.0
+-
+-        live_rows.append(
+-            {
+-                "id": chosen_old.get("id", ""),
+-                "combined_at": chosen_old.get("combined_at", ""),
+-                "source_database": chosen_old.get("source_database", ""),
+-                "source_archive": source_archive,
+-                "source_json": source_json,
+-                "title": title or str(chosen_old.get("title") or primary_json.stem),
+-                "source_url": source_url or str(chosen_old.get("source_url") or ""),
+-                "match_percent": match_percent,
+-                "selection_method": str(
+-                    chosen_old.get("selection_method") or "LIVE DIRECTORY"
+-                ),
+-                "destination_directory": str(directory),
+-                "destination_archive": str(primary_archive),
+-                "destination_json": str(primary_json),
+-                "moved_files": moved_files,
+-                "batch_id": chosen_old.get("batch_id", ""),
+-                "pair_order": chosen_old.get("pair_order", 0),
+-                "status": "combined",
+-                "recovered": chosen_old.get("recovered", 1),
+-                "reverse_ready": chosen_old.get("reverse_ready", 0),
+-                "recovery_note": chosen_old.get(
+-                    "recovery_note", "Live Table 3 inventory from files on disk"
+-                ),
+-            }
+-        )
+-
+-    return live_rows, len(stored_rows)
+-
++    rows, _ignored = scan_combined_directories(database_path.parent)
++    return rows, 0
+ 
+ def load_combined_shared_rows(database_path: Path) -> list[dict[str, Any]]:
+     """Read shared-file groups created when selected JSONs used one source folder."""
+@@ -4094,7 +4040,7 @@
+         width=38,
+     )
+     combined_directory_combo.grid(row=0, column=1, sticky="ew", padx=(0, 8))
+-    use_old_table_button = ttk.Button(table3_actions, text="REFRESH LIVE DIRECTORY")
++    use_old_table_button = ttk.Button(table3_actions, text="REFRESH DIRECT DIRECTORY")
+     use_old_table_button.grid(row=0, column=2, padx=(0, 8))
+     overwrite_table3_button = ttk.Button(
+         table3_actions, text="CLEAR OLD TABLE + RESCAN"
+@@ -5037,6 +4983,277 @@
+             selector.unbind("<ButtonRelease-1>")
+         return card
+ 
++    def make_direct_file_card(
++        parent: "tk.Misc",
++        *,
++        role: str,
++        title: str,
++        path_text: str,
++        related_files: Sequence[str] = (),
++    ) -> "tk.Frame":
++        """Create a small Table 3 card without metadata or archive inspection."""
++        card = tk.Frame(
++            parent,
++            background=PAGE_BG,
++            highlightbackground=CARD_BORDER,
++            highlightthickness=1,
++            padx=12,
++            pady=10,
++        )
++        tk.Label(
++            card,
++            text=role.upper(),
++            background=PAGE_BG,
++            foreground=TEXT_MUTED,
++            font=(gui_font_family, 8, "bold"),
++            anchor="w",
++        ).pack(fill="x")
++        tk.Label(
++            card,
++            text=title or Path(path_text).name,
++            background=PAGE_BG,
++            foreground=TEXT_MAIN,
++            font=(gui_font_family, 11, "bold"),
++            anchor="w",
++            justify="left",
++            wraplength=440,
++        ).pack(fill="x", pady=(3, 2))
++        path_button = tk.Button(
++            card,
++            text=shortened(path_text),
++            command=lambda p=path_text: reveal_existing(p),
++            background=PAGE_BG,
++            activebackground=PAGE_BG,
++            foreground=LINK_TEXT,
++            activeforeground=LINK_TEXT,
++            font=(gui_font_family, 9, "underline"),
++            anchor="w",
++            justify="left",
++            wraplength=440,
++            relief="flat",
++            borderwidth=0,
++            highlightthickness=0,
++            cursor="hand2",
++            padx=0,
++            pady=0,
++        )
++        path_button.pack(fill="x")
++
++        actions = tk.Frame(card, background=PAGE_BG)
++        actions.pack(fill="x", pady=(7, 0))
++        tk.Button(
++            actions,
++            text="OPEN ↗",
++            command=lambda p=path_text: open_existing(p),
++            background=PAGE_BG,
++            activebackground=PAGE_BG,
++            foreground=LINK_TEXT,
++            activeforeground=LINK_TEXT,
++            font=(gui_font_family, 8, "bold", "underline"),
++            relief="flat",
++            borderwidth=0,
++            highlightthickness=0,
++            cursor="hand2",
++            padx=0,
++            pady=0,
++        ).pack(side="left")
++        tk.Button(
++            actions,
++            text="SHOW IN FOLDER",
++            command=lambda p=path_text: reveal_existing(p),
++            background=PAGE_BG,
++            activebackground=PAGE_BG,
++            foreground=TEXT_MUTED,
++            activeforeground=TEXT_MUTED,
++            font=(gui_font_family, 8, "underline"),
++            relief="flat",
++            borderwidth=0,
++            highlightthickness=0,
++            cursor="hand2",
++            padx=12,
++            pady=0,
++        ).pack(side="left")
++
++        if related_files:
