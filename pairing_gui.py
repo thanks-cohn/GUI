@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Doku Doujins Pairing Gallery v33.1.
+"""Doku Doujins Pairing Gallery v33.2.
 
 The readable implementation is stored as compressed payload chunks beside this
 launcher. Use ``--dump-source PATH`` to write one standalone readable script.
@@ -12,7 +12,7 @@ import hashlib
 import sys
 from pathlib import Path
 
-APP_VERSION = "33.1"
+APP_VERSION = "33.2"
 _SOURCE_SHA256 = "af0b416c33edf52e2cbb0e33efc44bbd83677eefd5fec28ef03cee99bec411db"
 _EXPORT_HELPER_SHA256 = "f08beca4d9bdcc6ec9e44a3ec8138f8cf64ebd915fc087c2ca609fb7ca962930"
 _BULKOCR_WORKFLOW_SHA256 = "571b8da7a76dce79132bfb5083b38a73eaa793360d6e01455be5bb4e3b2053a3"
@@ -68,9 +68,9 @@ def _replace_once(source: str, old: str, new: str, label: str) -> str:
 
 
 def _read_patched_source() -> str:
-    """Apply lightweight Table 3 fixes and the v33.1 reversible BulkOCR export studio."""
+    """Apply lightweight Table 3 fixes and the v33.2 reversible BulkOCR export studio."""
     source = _read_embedded_source()
-    source = source.replace('APP_VERSION = "30.0"', 'APP_VERSION = "33.1"', 1)
+    source = source.replace('APP_VERSION = "30.0"', 'APP_VERSION = "33.2"', 1)
     source = source.replace("pady=(-8, 10)", "pady=(0, 10)")
     source = source.replace("pady=(-8,10)", "pady=(0, 10)")
 
@@ -86,6 +86,16 @@ def _read_patched_source() -> str:
         + workflow_source
         + "\n\ndef choose_gui_font_family() -> str:\n",
         "module export and BulkOCR helpers",
+    )
+
+    # Tk widget padding options accept one screen distance, not a two-value tuple.
+    # Keep asymmetric spacing on the pack geometry manager instead.
+    source = source.replace(
+        "lf=tk.Frame(card,bg='#172124',padx=20,pady=(0,16));"
+        "lf.pack(fill='both',expand=True)",
+        "lf=tk.Frame(card,bg='#172124',padx=20,pady=0);"
+        "lf.pack(fill='both',expand=True,pady=(0,16))",
+        1,
     )
 
     source = _replace_once(
@@ -239,7 +249,7 @@ def _read_patched_source() -> str:
 
 if __name__ == "__main__" and len(sys.argv) >= 2 and sys.argv[1] == "--dump-source":
     destination = Path(
-        sys.argv[2] if len(sys.argv) >= 3 else "pairing_gui_v33_1_source.py"
+        sys.argv[2] if len(sys.argv) >= 3 else "pairing_gui_v33_2_source.py"
     )
     destination.write_text(_read_patched_source(), encoding="utf-8")
     print(destination.resolve())
