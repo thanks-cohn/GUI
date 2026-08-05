@@ -1,0 +1,137 @@
++                f"OPEN DIRECTORY ↗  {shortened(directory)}  ·  "
++                f"{len(row.get('direct_files', []))} direct files"
++            ),
++            command=lambda p=directory: open_existing(p),
++            background=PAGE_BG,
++            activebackground=PAGE_BG,
++            foreground=LINK_TEXT,
++            activeforeground=LINK_TEXT,
++            font=(gui_font_family, 8, "bold", "underline"),
++            relief="flat",
++            borderwidth=0,
++            highlightthickness=0,
++            cursor="hand2",
++            anchor="e",
++        ).pack(anchor="e")
++
+     def make_thumbnail_card(parent: "tk.Misc", archive_file: str) -> "tk.Frame":
+         card = tk.Frame(
+             parent,
+@@ -5408,145 +5625,52 @@
+ 
+ 
+     def populate_combined_gallery(database_path: Path) -> tuple[int, int, int]:
+-        """Render Table 3 from one ~/Combined/<run>/combined-pairings.sqlite3."""
++        """Render Table 3 from direct filenames only, independent of SQLite."""
+         clear_gallery(combined_gallery)
+         add_section_headers(combined_gallery, selectable=False)
+-        rows, stored_sql_row_count = load_live_combined_inventory(database_path)
+-        moved_file_count = 0
+-        for item in rows:
+-            archive_file = str(item.get("destination_archive") or item.get("source_archive") or "")
+-            json_file = str(item.get("destination_json") or item.get("source_json") or "")
+-            moved_files = [str(value) for value in item.get("moved_files", [])]
+-            moved_file_count += len(moved_files)
+-            related_files = [
+-                path
+-                for path in moved_files
+-                if path not in {archive_file, json_file}
+-            ]
+-            add_pair_group(
+-                combined_gallery,
+-                archive_file,
+-                [
+-                    {
+-                        "title": str(item.get("title") or Path(json_file).stem),
+-                        "json_file": json_file,
+-                        "match_percent": item.get("match_percent", 0.0),
+-                        "selection_method": str(item.get("selection_method", "")),
+-                        "related_files": related_files,
+-                        "source_url": str(item.get("source_url", "")),
+-                    }
+-                ],
+-                exact_mode=True,
+-            )
+-
+-            destination_directory = str(item.get("destination_directory", ""))
+-            if destination_directory:
+-                folder_row = tk.Frame(combined_gallery, background=PAGE_BG)
+-                folder_row.pack(fill="x", padx=12, pady=(-8, 10))
+-                folder_button = tk.Button(
+-                    folder_row,
+-                    text=f"OPEN COMBINED DIRECTORY ↗  {shortened(destination_directory)}",
+-                    command=lambda p=destination_directory: open_existing(p),
+-                    background=PAGE_BG,
+-                    activebackground=PAGE_BG,
+-                    foreground=LINK_TEXT,
+-                    activeforeground=LINK_TEXT,
+-                    font=(gui_font_family, 8, "bold", "underline"),
+-                    cursor="hand2",
+-                    relief="flat",
+-                    borderwidth=0,
+-                    highlightthickness=0,
+-                    anchor="w",
+-                )
+-                folder_button.pack(anchor="e")
+-                bind_press_action(
+-                    folder_button,
+-                    lambda p=destination_directory: open_existing(p),
+-                )
++        try:
++            max_images = int(combined_max_images_var.get())
++            max_archives = int(combined_max_archives_var.get())
++        except (TypeError, ValueError, tk.TclError):
++            max_images = 1
++            max_archives = 1
++        rows, ignored = scan_combined_directories(
++            database_path.parent,
++            enforce_limits=bool(combined_limits_enabled_var.get()),
++            max_images=max_images,
++            max_archives=max_archives,
++        )
+ 
+-        shared_rows = load_combined_shared_rows(database_path)
+-        shared_count = sum(len(row.get("moved_files", [])) for row in shared_rows)
+-        if shared_rows:
+-            heading = tk.Label(
+-                combined_gallery,
+-                text="SHARED SOURCE-DIRECTORY FILES",
+-                background=PAGE_BG,
+-                foreground=TEXT_MUTED,
+-                font=(gui_font_family, 10, "bold"),
+-                anchor="w",
+-                pady=10,
+-            )
+-            heading.pack(fill="x")
+-            for row in shared_rows:
+-                destination = str(row.get("destination_directory", ""))
+-                files = [str(value) for value in row.get("moved_files", [])]
+-                card = tk.Frame(
+-                    combined_gallery,
+-                    background=PAGE_BG,
+-                    highlightbackground=CARD_BORDER,
+-                    highlightthickness=1,
+-                    padx=12,
+-                    pady=10,
+-                )
+-                card.pack(fill="x", pady=(0, 10))
+-                tk.Label(
+-                    card,
+-                    text=Path(destination).name or "Shared files",
+-                    background=PAGE_BG,
+-                    foreground=TEXT_MAIN,
+-                    font=(gui_font_family, 10, "bold"),
+-                    anchor="w",
+-                ).pack(fill="x")
+-                destination_button = tk.Button(
+-                    card,
+-                    text=shortened(destination),
+-                    command=lambda p=destination: open_existing(p),
+-                    background=PAGE_BG,
+-                    activebackground=PAGE_BG,
+-                    foreground=LINK_TEXT,
+-                    activeforeground=LINK_TEXT,
+-                    font=(gui_font_family, 9, "underline"),
+-                    cursor="hand2",
+-                    relief="flat",
+-                    borderwidth=0,
