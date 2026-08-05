@@ -1,0 +1,137 @@
+-                    highlightthickness=0,
+-                    anchor="w",
+-                )
+-                destination_button.pack(fill="x", pady=(3, 6))
+-                bind_press_action(
+-                    destination_button,
+-                    lambda p=destination: open_existing(p),
+-                )
+-                tk.Label(
+-                    card,
+-                    text=f"{len(files)} file{'s' if len(files) != 1 else ''} preserved here",
+-                    background=PAGE_BG,
+-                    foreground=TEXT_MUTED,
+-                    font=(gui_font_family, 9),
+-                    anchor="w",
+-                ).pack(fill="x")
++        direct_file_count = 0
++        for row_index, row in enumerate(rows):
++            direct_file_count += len(row.get("direct_files", []))
++            add_combined_directory_group(combined_gallery, row, row_index)
+ 
+-        if not rows and not shared_rows:
++        if not rows:
+             tk.Label(
+                 combined_gallery,
+-                text="No combined pairings are stored in this manifest.",
++                text=(
++                    "No direct child directory contains both a direct CBZ/ZIP "
++                    "and a direct JSON."
++                ),
+                 background=PAGE_BG,
+                 foreground=TEXT_MUTED,
+                 font=(gui_font_family, 11),
+                 pady=24,
+             ).pack(anchor="w")
+-        # Force geometry and scrollregion calculation after all cards exist.  This
+-        # makes the scrollbar reflect every Table 3 row immediately instead of
+-        # retaining the height of the first rendered card.
++
++        combined_loaded_var.set(
++            f"{len(rows)} DIRECTORIES LOADED · {direct_file_count} DIRECT FILES"
++        )
++        table3_note_var.set(
++            f"Filename-only scan · {len(ignored)} non-pairing/filtered directories skipped"
++        )
+         combined_gallery.update_idletasks()
+         bbox = combined_canvas.bbox("all")
+         if bbox is not None:
+             combined_canvas.configure(scrollregion=bbox)
+         combined_canvas.yview_moveto(0)
+-        combined_loaded_var.set(
+-            f"{len(rows)} LIVE DIRECTORIES LOADED · SQL LEDGER ROWS: {stored_sql_row_count}"
+-        )
+-        return len(rows), moved_file_count, shared_count
++        return len(rows), direct_file_count, 0
+ 
+     def current_combined_database() -> Path | None:
+         selected_name = combined_directory_var.get().strip()
+@@ -5616,10 +5740,7 @@
+             return
+ 
+         overwrite_table3_button.state(["!disabled"])
+-        if database_path.is_file():
+-            use_old_table_button.state(["!disabled"])
+-        else:
+-            use_old_table_button.state(["disabled"])
++        use_old_table_button.state(["!disabled"])
+ 
+         reversible = False
+         reversible_pairs = 0
+@@ -5668,14 +5789,6 @@
+         database_path = current_combined_database()
+         if database_path is None:
+             return
+-        if not database_path.is_file():
+-            messagebox.showinfo(
+-                "No old table",
+-                "This Combined directory has no combined-pairings.sqlite3 yet.\n\n"
+-                "Choose CLEAR OLD TABLE + RESCAN to rebuild it from its folders.",
+-                parent=root,
+-            )
+-            return
+         show_combined_database(combined_index)
+ 
+     def overwrite_current_table3() -> None:
+@@ -6252,7 +6365,7 @@
+             clear_gallery(combined_gallery)
+             tk.Label(
+                 combined_gallery,
+-                text=f"No directories exist under {combined_root}. Use COMBINE AND STRUCTURE in table 2 first.",
++                text=f"No directories exist under {combined_root}.",
+                 background=PAGE_BG,
+                 foreground=TEXT_MUTED,
+                 font=(gui_font_family, 11),
+@@ -6271,78 +6384,52 @@
+ 
+         combined_index = max(0, min(index, len(combined_databases) - 1))
+         database_path = combined_databases[combined_index]
+-        combined_loaded_var.set("LOADING LIVE DIRECTORY…")
+-        table_status_var.set(f"Loading live Combined directory: {database_path.parent}")
+-        combined_directory_var.set(database_path.parent.name)
+-        if not database_path.is_file():
+-            filename_var.set(f"{database_path.parent.name}  ·  no old table")
+-            run_counter_var.set(
+-                f"Combined directory {combined_index + 1} of {len(combined_databases)}"
+-            )
+-            clear_gallery(combined_gallery)
+-            tk.Label(
+-                combined_gallery,
+-                text=(
+-                    "This directory exists under ~/Combined but has no stored Table 3 manifest.\n\n"
+-                    "Choose CLEAR OLD TABLE + RESCAN to scan its pairing directories."
+-                ),
+-                background=PAGE_BG,
+-                foreground=TEXT_MUTED,
+-                font=(gui_font_family, 11),
+-                pady=24,
+-                justify="left",
+-            ).pack(anchor="w")
+-            table_status_var.set(f"Selected Combined directory: {database_path.parent}")
+-            combined_loaded_var.set("NO TABLE YET")
+-            older_button.state(["disabled"] if combined_index <= 0 else ["!disabled"])
+-            newer_button.state(["disabled"] if combined_index >= len(combined_databases) - 1 else ["!disabled"])
+-            open_database_button.state(["disabled"])
+-            submit_button.state(["disabled"])
+-            search_button.state(["disabled"])
+-            search_entry.state(["disabled"])
+-            deselect_all_button.state(["disabled"])
+-            refresh_table3_actions()
+-            return
+-        try:
+-            version = load_combined_version(database_path)
+-        except sqlite3.Error:
+-            version = "unreadable combined output"
+-        filename_var.set(
+-            f"{database_path.parent.name}/{database_path.name}  ·  {version}"
+-        )
