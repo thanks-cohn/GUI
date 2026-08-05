@@ -19,9 +19,9 @@ _SOURCE_SHA256 = "af0b416c33edf52e2cbb0e33efc44bbd83677eefd5fec28ef03cee99bec411
 def _read_embedded_source() -> str:
     payload_dir = Path(__file__).resolve().parent / ".payload-v30"
     parts = sorted(payload_dir.glob("part*.b64"))
-    if len(parts) != 10:
+    if len(parts) != 11:
         raise RuntimeError(
-            f"Expected 10 v30 payload parts beside this launcher, found {len(parts)}"
+            f"Expected 11 v30 payload parts beside this launcher, found {len(parts)}"
         )
     encoded = "".join(part.read_text(encoding="ascii").strip() for part in parts)
     source_bytes = bz2.decompress(base64.b64decode(encoded))
