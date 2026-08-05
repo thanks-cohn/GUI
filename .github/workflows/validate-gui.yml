@@ -16,11 +16,13 @@ jobs:
       - name: Compile launcher
         run: python -m py_compile pairing_gui.py
       - name: Dump standalone source
-        run: python pairing_gui.py --dump-source /tmp/pairing_gui_v33_source.py
+        run: python pairing_gui.py --dump-source /tmp/pairing_gui_v33_1_source.py
       - name: Compile standalone source
-        run: python -m py_compile /tmp/pairing_gui_v33_source.py
+        run: python -m py_compile /tmp/pairing_gui_v33_1_source.py
       - name: Verify version and BulkOCR studio
         run: |
-          grep -q 'APP_VERSION = "33.0"' /tmp/pairing_gui_v33_source.py
-          grep -q 'run_table3_bulkocr_export_studio' /tmp/pairing_gui_v33_source.py
-          grep -q 'ingest_ocr_records' /tmp/pairing_gui_v33_source.py
+          grep -q 'APP_VERSION = "33.1"' /tmp/pairing_gui_v33_1_source.py
+          grep -q '^import tkinter as tk$' /tmp/pairing_gui_v33_1_source.py
+          grep -q '^from tkinter import messagebox, ttk$' /tmp/pairing_gui_v33_1_source.py
+          grep -q 'run_table3_bulkocr_export_studio' /tmp/pairing_gui_v33_1_source.py
+          grep -q 'ingest_ocr_records' /tmp/pairing_gui_v33_1_source.py
