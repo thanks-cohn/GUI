@@ -1,0 +1,150 @@
++                "json_title": primary_json.stem,
++                "archive_count": len(archives),
++                "json_count": len(jsons),
++                "image_count": len(images),
++            }
++        )
++
++    return rows, ignored
++
++
+ def _json_has_pairing_metadata(path: Path) -> tuple[bool, bool]:
+     """Return whether a JSON has a title and Source-URL/url field."""
+     try:
+@@ -3175,186 +3294,13 @@
+ 
+ 
+ def load_live_combined_inventory(database_path: Path) -> tuple[list[dict[str, Any]], int]:
+-    """Build Table 3 from the files that exist on disk right now.
+-
+-    The SQLite manifest is used only to enrich rows with original paths, scores,
+-    and reversal metadata.  It is never allowed to decide how many cards appear.
+-    This deliberately prevents a stale/partially rebuilt SQL table from hiding
+-    pairing directories that visibly exist under ~/Combined/<run>/.
++    """Compatibility wrapper for the filename-only Table 3 scanner.
+ 
+-    Returns ``(live_rows, stored_sql_row_count)``.
++    The second return value used to be an SQLite row count. It is now always zero
++    because Table 3 display is deliberately independent of SQL.
+     """
+-    database_path = database_path.expanduser().resolve()
+-    run_directory = database_path.parent
+-    stored_rows: list[dict[str, Any]] = []
+-    if database_path.is_file():
+-        try:
+-            stored_rows = load_combined_table(database_path)
+-        except (OSError, sqlite3.Error, json.JSONDecodeError):
+-            stored_rows = []
+-
+-    rows_by_directory: dict[str, list[dict[str, Any]]] = defaultdict(list)
+-    for row in stored_rows:
+-        destinations = [
+-            _resolved_text(row.get("destination_directory")),
+-            str(Path(_resolved_text(row.get("destination_archive"))).parent)
+-            if _resolved_text(row.get("destination_archive")) else "",
+-            str(Path(_resolved_text(row.get("destination_json"))).parent)
+-            if _resolved_text(row.get("destination_json")) else "",
+-        ]
+-        for value in destinations:
+-            if value:
+-                rows_by_directory[str(Path(value).expanduser().resolve())].append(row)
+-
+-    ledger_by_directory: dict[str, dict[str, list[Path]]] = defaultdict(
+-        lambda: {"archive": [], "json": []}
+-    )
+-    ledger_source_by_destination: dict[str, str] = {}
+-    if database_path.is_file():
+-        connection = sqlite3.connect(database_path)
+-        try:
+-            tables = {
+-                str(row[0])
+-                for row in connection.execute(
+-                    "SELECT name FROM sqlite_master WHERE type='table'"
+-                )
+-            }
+-            if "combined_file_moves" in tables:
+-                for role, source_path, destination_path, status in connection.execute(
+-                    "SELECT role, source_path, destination_path, status "
+-                    "FROM combined_file_moves"
+-                ):
+-                    if str(status or "moved") == "reversed":
+-                        continue
+-                    destination = Path(str(destination_path)).expanduser()
+-                    try:
+-                        destination = destination.resolve()
+-                    except OSError:
+-                        pass
+-                    ledger_source_by_destination[str(destination)] = str(source_path or "")
+-                    role_text = str(role or "").casefold()
+-                    if role_text in {"archive", "json"}:
+-                        ledger_by_directory[str(destination.parent)][role_text].append(destination)
+-        finally:
+-            connection.close()
+-
+-    live_rows: list[dict[str, Any]] = []
+-    if not run_directory.is_dir():
+-        return live_rows, len(stored_rows)
+-
+-    pairing_directories = sorted(
+-        (
+-            path.resolve()
+-            for path in run_directory.iterdir()
+-            if path.is_dir()
+-            and not path.name.startswith(".")
+-            and path.name != "manifest-backups"
+-        ),
+-        key=lambda path: path.name.casefold(),
+-    )
+-
+-    for directory in pairing_directories:
+-        try:
+-            direct_files = sorted(
+-                (path.resolve() for path in directory.iterdir() if path.is_file()),
+-                key=lambda path: path.name.casefold(),
+-            )
+-        except OSError:
+-            continue
+-        archives = [
+-            path for path in direct_files
+-            if path.suffix.casefold() in SUPPORTED_ARCHIVE_SUFFIXES
+-        ]
+-        jsons = [path for path in direct_files if path.suffix.casefold() == ".json"]
+-        if not archives or not jsons:
+-            continue
+-
+-        directory_key = str(directory)
+-        old_rows = rows_by_directory.get(directory_key, [])
+-        ledger = ledger_by_directory.get(directory_key, {"archive": [], "json": []})
+-        primary_json = _choose_primary_json(
+-            directory,
+-            jsons,
+-            old_rows,
+-            ledger.get("json", []),
+-            allow_deterministic_fallback=True,
+-        )
+-        if primary_json is None:
+-            primary_json = jsons[0]
+-        primary_archive = _choose_primary_archive(
+-            directory,
+-            archives,
+-            old_rows,
+-            ledger.get("archive", []),
+-            primary_json,
+-        )
+-        if primary_archive is None:
+-            primary_archive = archives[0]
+-
+-        chosen_old: dict[str, Any] = {}
+-        for row in old_rows:
+-            old_archive = _resolved_text(row.get("destination_archive"))
+-            old_json = _resolved_text(row.get("destination_json"))
+-            if (
+-                old_archive and Path(old_archive).expanduser().resolve() == primary_archive
+-            ) or (
+-                old_json and Path(old_json).expanduser().resolve() == primary_json
+-            ):
+-                chosen_old = row
+-                break
+-        if not chosen_old and old_rows:
+-            chosen_old = old_rows[0]
+-
