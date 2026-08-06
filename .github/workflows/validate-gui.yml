@@ -25,7 +25,9 @@ jobs:
 
           def launch_gui():
               exact_json_card_frames: dict[tuple[str, str], "tk.Frame"] = {}
-              drag_state: dict[str, Any] = {"x": 1}
+              drag_state: dict[str, Any] = {
+                  "x": 1,
+              }
               candidate_canvas, candidate_gallery = make_scroll_gallery(candidate_tab)
               exact_canvas, exact_gallery = make_scroll_gallery(exact_tab)
               combined_canvas, combined_gallery = make_scroll_gallery(combined_tab)
