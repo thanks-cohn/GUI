@@ -14,6 +14,7 @@ import sys
 from pathlib import Path
 
 from combine_async_v37 import apply as apply_combine_async
+from combine_close_guard_v37 import apply as apply_combine_close_guard
 from gallery_pagination_v35 import apply as apply_gallery_pagination
 from gallery_virtual_v36 import apply as apply_gallery_virtual
 
@@ -147,6 +148,7 @@ def _read_patched_source() -> str:
     source = apply_gallery_pagination(source)
     source = apply_gallery_virtual(source)
     source = apply_combine_async(source)
+    source = apply_combine_close_guard(source)
 
     source = _replace_once(
         source,
