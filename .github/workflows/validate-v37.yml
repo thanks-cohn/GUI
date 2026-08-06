@@ -13,6 +13,19 @@ on:
       - .payload-bulkocr-v34/**
       - table3_bulkocr_v33/**
       - .github/workflows/validate-v37.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - pairing_gui.py
+      - combine_async_v37.py
+      - gallery_pagination_v35.py
+      - gallery_virtual_v36.py
+      - .payload-v30/**
+      - .payload-table3-v2/**
+      - .payload-bulkocr-v34/**
+      - table3_bulkocr_v33/**
+      - .github/workflows/validate-v37.yml
+      - .github/validation-v37-trigger.txt
   workflow_dispatch:
 
 jobs:
