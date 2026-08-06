@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Doku Doujins Pairing Gallery v36.0.
+"""Doku Doujins Pairing Gallery v37.0.
 
 The readable implementation is stored as compressed payload chunks beside this
 launcher. Use ``--dump-source PATH`` to write one standalone readable script.
@@ -13,10 +13,11 @@ import re
 import sys
 from pathlib import Path
 
+from combine_async_v37 import apply as apply_combine_async
 from gallery_pagination_v35 import apply as apply_gallery_pagination
 from gallery_virtual_v36 import apply as apply_gallery_virtual
 
-APP_VERSION = "36.0"
+APP_VERSION = "37.0"
 _SOURCE_SHA256 = "af0b416c33edf52e2cbb0e33efc44bbd83677eefd5fec28ef03cee99bec411db"
 _EXPORT_HELPER_SHA256 = "f08beca4d9bdcc6ec9e44a3ec8138f8cf64ebd915fc087c2ca609fb7ca962930"
 _BULKOCR_WORKFLOW_SHA256 = "571b8da7a76dce79132bfb5083b38a73eaa793360d6e01455be5bb4e3b2053a3"
@@ -83,12 +84,12 @@ def _read_bulkocr_resume_patch_source() -> str:
 
 def _replace_once(source: str, old: str, new: str, label: str) -> str:
     if old not in source:
-        raise RuntimeError(f"v36 source patch target not found: {label}")
+        raise RuntimeError(f"v37 source patch target not found: {label}")
     return source.replace(old, new, 1)
 
 
 def _read_patched_source() -> str:
-    """Apply v36 virtual galleries, Table 3 fixes, and resumable BulkOCR export."""
+    """Apply v37 safe combine, virtual galleries, and resumable BulkOCR export."""
     source = _read_embedded_source()
     source = source.replace('APP_VERSION = "30.0"', 'APP_VERSION = "36.0"', 1)
     source = source.replace("pady=(-8, 10)", "pady=(0, 10)")
@@ -126,7 +127,7 @@ def _read_patched_source() -> str:
     )
     if wheel_match is None:
         raise RuntimeError(
-            "v36 source patch target not found: safe mouse-wheel routing"
+            "v37 source patch target not found: safe mouse-wheel routing"
         )
     wheel_indent = wheel_match.group("indent")
     wheel_guard = (
@@ -141,10 +142,11 @@ def _read_patched_source() -> str:
         + source[wheel_match.end() :]
     )
 
-    # v35 supplies the stable page-oriented scaffolding. v36 then turns those
-    # pages into one expandable, bounded moving window with durable model state.
+    # v35 supplies page scaffolding, v36 bounds the live widget window, and v37
+    # makes Table 2 combination selective, preflighted, cancellable, and asynchronous.
     source = apply_gallery_pagination(source)
     source = apply_gallery_virtual(source)
+    source = apply_combine_async(source)
 
     source = _replace_once(
         source,
@@ -297,7 +299,7 @@ def _read_patched_source() -> str:
 
 if __name__ == "__main__" and len(sys.argv) >= 2 and sys.argv[1] == "--dump-source":
     destination = Path(
-        sys.argv[2] if len(sys.argv) >= 3 else "pairing_gui_v36_source.py"
+        sys.argv[2] if len(sys.argv) >= 3 else "pairing_gui_v37_source.py"
     )
     patched_source = _read_patched_source()
     compile(patched_source, str(destination), "exec")
