@@ -1,1 +1,1 @@
-Validate the generated GUI v37 source, asynchronous combine workflow, and selective sibling move rules.
+Validate the generated GUI v37 source, asynchronous combine workflow, selective sibling move rules, and safe close/rollback guard.
