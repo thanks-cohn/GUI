@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Doku Doujins Pairing Gallery v33.2.
+"""Doku Doujins Pairing Gallery v34.0.
 
 The readable implementation is stored as compressed payload chunks beside this
 launcher. Use ``--dump-source PATH`` to write one standalone readable script.
@@ -12,10 +12,11 @@ import hashlib
 import sys
 from pathlib import Path
 
-APP_VERSION = "33.2"
+APP_VERSION = "34.0"
 _SOURCE_SHA256 = "af0b416c33edf52e2cbb0e33efc44bbd83677eefd5fec28ef03cee99bec411db"
 _EXPORT_HELPER_SHA256 = "f08beca4d9bdcc6ec9e44a3ec8138f8cf64ebd915fc087c2ca609fb7ca962930"
 _BULKOCR_WORKFLOW_SHA256 = "571b8da7a76dce79132bfb5083b38a73eaa793360d6e01455be5bb4e3b2053a3"
+_BULKOCR_RESUME_PATCH_SHA256 = "8f1207ab661230dd658988646f28945213cfb695fc4323565dd1f0f6ff50d8a3"
 
 
 def _read_embedded_source() -> str:
@@ -61,21 +62,37 @@ def _read_bulkocr_workflow_source() -> str:
     return source_bytes.decode("utf-8")
 
 
+def _read_bulkocr_resume_patch_source() -> str:
+    payload = (
+        Path(__file__).resolve().parent
+        / ".payload-bulkocr-v34"
+        / "source.b64"
+    )
+    source_bytes = bz2.decompress(
+        base64.b64decode(payload.read_text(encoding="ascii").strip())
+    )
+    actual = hashlib.sha256(source_bytes).hexdigest()
+    if actual != _BULKOCR_RESUME_PATCH_SHA256:
+        raise RuntimeError(f"BulkOCR v34 resume patch checksum mismatch: {actual}")
+    return source_bytes.decode("utf-8")
+
+
 def _replace_once(source: str, old: str, new: str, label: str) -> str:
     if old not in source:
-        raise RuntimeError(f"v33 source patch target not found: {label}")
+        raise RuntimeError(f"v34 source patch target not found: {label}")
     return source.replace(old, new, 1)
 
 
 def _read_patched_source() -> str:
-    """Apply lightweight Table 3 fixes and the v33.2 reversible BulkOCR export studio."""
+    """Apply lightweight Table 3 fixes and the v34 resumable BulkOCR export studio."""
     source = _read_embedded_source()
-    source = source.replace('APP_VERSION = "30.0"', 'APP_VERSION = "33.2"', 1)
+    source = source.replace('APP_VERSION = "30.0"', 'APP_VERSION = "34.0"', 1)
     source = source.replace("pady=(-8, 10)", "pady=(0, 10)")
     source = source.replace("pady=(-8,10)", "pady=(0, 10)")
 
     helper_source = _read_export_helper_source()
     workflow_source = _read_bulkocr_workflow_source()
+    resume_patch_source = _read_bulkocr_resume_patch_source()
     tkinter_globals = "\nimport tkinter as tk\nfrom tkinter import messagebox, ttk\n"
     source = _replace_once(
         source,
@@ -84,6 +101,8 @@ def _read_patched_source() -> str:
         + helper_source
         + "\n"
         + workflow_source
+        + "\n"
+        + resume_patch_source
         + "\n\ndef choose_gui_font_family() -> str:\n",
         "module export and BulkOCR helpers",
     )
@@ -151,7 +170,7 @@ def _read_patched_source() -> str:
         export_table3_button.configure(state="disabled")
         combined_loaded_var.set("OPENING EXPORT STUDIO…")
         table_status_var.set(
-            f"Preparing reversible BulkOCR export from {database_path.parent}…"
+            f"Preparing resumable BulkOCR export from {database_path.parent}…"
         )
         root.update_idletasks()
         try:
@@ -175,7 +194,7 @@ def _read_patched_source() -> str:
             if result is None:
                 combined_loaded_var.set("EXPORT SESSION SAVED")
                 table_status_var.set(
-                    "Export Studio closed. Completed crumbs are saved and resumable."
+                    "Export Studio closed. Appended crumbs are saved and resumable."
                 )
             else:
                 sqlite_path, sql_path, work_count, session_path = result
@@ -191,7 +210,7 @@ def _read_patched_source() -> str:
                     f"Works exported: {work_count}\n\n"
                     f"SQLite:\n{sqlite_path}\n\n"
                     f"SQL dump:\n{sql_path}\n\n"
-                    f"Reversible session:\n{session_path}\n\n"
+                    f"Resumable session:\n{session_path}\n\n"
                     f"Stable latest copy:\n{EXPORT_FOR_INGEST_ROOT / 'latest.sqlite3'}",
                     parent=root,
                 )
@@ -204,7 +223,7 @@ def _read_patched_source() -> str:
         "    def notebook_tab_changed(_event: object | None = None) -> None:\n",
         export_handler
         + "    def notebook_tab_changed(_event: object | None = None) -> None:\n",
-        "Table 3 reversible BulkOCR export handler",
+        "Table 3 resumable BulkOCR export handler",
     )
 
     tab_old = """    def notebook_tab_changed(_event: object | None = None) -> None:
@@ -249,7 +268,7 @@ def _read_patched_source() -> str:
 
 if __name__ == "__main__" and len(sys.argv) >= 2 and sys.argv[1] == "--dump-source":
     destination = Path(
-        sys.argv[2] if len(sys.argv) >= 3 else "pairing_gui_v33_2_source.py"
+        sys.argv[2] if len(sys.argv) >= 3 else "pairing_gui_v34_source.py"
     )
     destination.write_text(_read_patched_source(), encoding="utf-8")
     print(destination.resolve())
