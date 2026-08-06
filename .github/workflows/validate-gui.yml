@@ -13,21 +13,63 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: Compile launcher
-        run: python -m py_compile pairing_gui.py
+      - name: Compile launcher and pagination patch
+        run: python -m py_compile pairing_gui.py gallery_pagination_v35.py
+      - name: Test pagination patch against a synthetic gallery source
+        run: |
+          python - <<'PY'
+          from gallery_pagination_v35 import apply
+
+          source = '''from typing import Any
+          from pathlib import Path
+
+          def launch_gui():
+              exact_json_card_frames: dict[tuple[str, str], "tk.Frame"] = {}
+              drag_state: dict[str, Any] = {"x": 1}
+              candidate_canvas, candidate_gallery = make_scroll_gallery(candidate_tab)
+              exact_canvas, exact_gallery = make_scroll_gallery(exact_tab)
+              combined_canvas, combined_gallery = make_scroll_gallery(combined_tab)
+
+              def scroll_archive_into_view(archive_file: str) -> None:
+                  """Bring a reassignment destination into view and briefly outline it."""
+                  pass
+
+              def jump_to_pairing_location(*, table_number: int, archive_file: str, json_file: str) -> None:
+                  """Switch tabs, scroll to the owning CBZ block, and highlight the JSON card."""
+                  if table_number == 2:
+                      pass
+                  else:
+                      pass
+
+              def populate_candidate_gallery(database_path: Path) -> tuple[int, int]:
+                  return 0, 0
+
+              def populate_exact_gallery(database_path: Path) -> tuple[int, int]:
+                  return 0, 0
+
+              def populate_combined_gallery(database_path: Path) -> tuple[int, int, int]:
+                  return 0, 0, 0
+          '''
+          patched = apply(source)
+          compile(patched, '<pagination-test>', 'exec')
+          assert 'PAIRING_PAGE_SIZE = 20' in patched
+          assert 'NEXT 20 ▶' in patched
+          assert patched.count('def populate_candidate_gallery') == 1
+          assert patched.count('def populate_exact_gallery') == 1
+          PY
       - name: Dump and precompile standalone source
-        run: python pairing_gui.py --dump-source /tmp/pairing_gui_v34_2_source.py
+        run: python pairing_gui.py --dump-source /tmp/pairing_gui_v35_source.py
       - name: Compile standalone source independently
-        run: python -m py_compile /tmp/pairing_gui_v34_2_source.py
-      - name: Verify version, wheel guard, and resumable BulkOCR studio
+        run: python -m py_compile /tmp/pairing_gui_v35_source.py
+      - name: Verify pagination, wheel guard, and resumable BulkOCR studio
         run: |
           python - <<'PY'
           import re
           from pathlib import Path
 
-          path = Path('/tmp/pairing_gui_v34_2_source.py')
+          path = Path('/tmp/pairing_gui_v35_source.py')
           source = path.read_text(encoding='utf-8')
-          assert 'APP_VERSION = "34.2"' in source
+          assert 'APP_VERSION = "35.0"' in source
           assert re.search(
               r'(?m)^(?P<i>[ \t]*)try:\n'
               r'(?P=i)    target = root\.winfo_containing\(event\.x_root, event\.y_root\)\n'
@@ -38,6 +80,13 @@ jobs:
           for token in (
               'import tkinter as tk',
               'from tkinter import messagebox, ttk',
+              'PAIRING_PAGE_SIZE = 20',
+              'def render_candidate_page()',
+              'def render_exact_page()',
+              '◀ PREVIOUS 20',
+              'NEXT 20 ▶',
+              'show_candidate_archive_page(archive_file)',
+              'show_exact_archive_page(archive_file)',
               'run_table3_bulkocr_export_studio',
               'ingest_ocr_records',
               '_v34_append_jsonl',
