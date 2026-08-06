@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Doku Doujins Pairing Gallery v34.1.
+"""Doku Doujins Pairing Gallery v34.2.
 
 The readable implementation is stored as compressed payload chunks beside this
 launcher. Use ``--dump-source PATH`` to write one standalone readable script.
@@ -9,10 +9,11 @@ from __future__ import annotations
 import base64
 import bz2
 import hashlib
+import re
 import sys
 from pathlib import Path
 
-APP_VERSION = "34.1"
+APP_VERSION = "34.2"
 _SOURCE_SHA256 = "af0b416c33edf52e2cbb0e33efc44bbd83677eefd5fec28ef03cee99bec411db"
 _EXPORT_HELPER_SHA256 = "f08beca4d9bdcc6ec9e44a3ec8138f8cf64ebd915fc087c2ca609fb7ca962930"
 _BULKOCR_WORKFLOW_SHA256 = "571b8da7a76dce79132bfb5083b38a73eaa793360d6e01455be5bb4e3b2053a3"
@@ -79,14 +80,14 @@ def _read_bulkocr_resume_patch_source() -> str:
 
 def _replace_once(source: str, old: str, new: str, label: str) -> str:
     if old not in source:
-        raise RuntimeError(f"v34.1 source patch target not found: {label}")
+        raise RuntimeError(f"v34.2 source patch target not found: {label}")
     return source.replace(old, new, 1)
 
 
 def _read_patched_source() -> str:
-    """Apply lightweight Table 3 fixes and the v34.1 resumable BulkOCR export studio."""
+    """Apply lightweight Table 3 fixes and the v34.2 resumable BulkOCR export studio."""
     source = _read_embedded_source()
-    source = source.replace('APP_VERSION = "30.0"', 'APP_VERSION = "34.1"', 1)
+    source = source.replace('APP_VERSION = "30.0"', 'APP_VERSION = "34.2"', 1)
     source = source.replace("pady=(-8, 10)", "pady=(0, 10)")
     source = source.replace("pady=(-8,10)", "pady=(0, 10)")
 
@@ -118,15 +119,28 @@ def _read_patched_source() -> str:
     )
 
     # Native Tk message boxes are not registered as ordinary child widgets.
-    # Mouse-wheel routing can briefly hit one and raise KeyError/TclError.
-    source = _replace_once(
+    # Anchor the match at the beginning of the line and preserve its full indent;
+    # matching a suffix of the indentation produced an invalid try block in v34.1.
+    wheel_match = re.search(
+        r"(?m)^(?P<indent>[ \t]*)target = "
+        r"root\.winfo_containing\(event\.x_root, event\.y_root\)$",
         source,
-        "        target = root.winfo_containing(event.x_root, event.y_root)\n",
-        "        try:\n"
-        "            target = root.winfo_containing(event.x_root, event.y_root)\n"
-        "        except (KeyError, tk.TclError):\n"
-        "            return\n",
-        "safe mouse-wheel routing around native dialogs",
+    )
+    if wheel_match is None:
+        raise RuntimeError(
+            "v34.2 source patch target not found: safe mouse-wheel routing"
+        )
+    wheel_indent = wheel_match.group("indent")
+    wheel_guard = (
+        f"{wheel_indent}try:\n"
+        f"{wheel_indent}    target = root.winfo_containing(event.x_root, event.y_root)\n"
+        f"{wheel_indent}except (KeyError, tk.TclError):\n"
+        f"{wheel_indent}    return"
+    )
+    source = (
+        source[: wheel_match.start()]
+        + wheel_guard
+        + source[wheel_match.end() :]
     )
 
     source = _replace_once(
@@ -280,9 +294,11 @@ def _read_patched_source() -> str:
 
 if __name__ == "__main__" and len(sys.argv) >= 2 and sys.argv[1] == "--dump-source":
     destination = Path(
-        sys.argv[2] if len(sys.argv) >= 3 else "pairing_gui_v34_1_source.py"
+        sys.argv[2] if len(sys.argv) >= 3 else "pairing_gui_v34_2_source.py"
     )
-    destination.write_text(_read_patched_source(), encoding="utf-8")
+    patched_source = _read_patched_source()
+    compile(patched_source, str(destination), "exec")
+    destination.write_text(patched_source, encoding="utf-8")
     print(destination.resolve())
     raise SystemExit(0)
 
