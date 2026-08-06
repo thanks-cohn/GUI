@@ -1,0 +1,66 @@
+name: Validate GUI v37
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - pairing_gui.py
+      - combine_async_v37.py
+      - gallery_pagination_v35.py
+      - gallery_virtual_v36.py
+      - .payload-v30/**
+      - .payload-table3-v2/**
+      - .payload-bulkocr-v34/**
+      - table3_bulkocr_v33/**
+      - .github/workflows/validate-v37.yml
+  workflow_dispatch:
+
+jobs:
+  generated-source:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - name: Compile launcher and source patches
+        run: |
+          python -m py_compile pairing_gui.py combine_async_v37.py gallery_pagination_v35.py gallery_virtual_v36.py
+      - name: Reconstruct standalone v37 source
+        run: |
+          python pairing_gui.py --dump-source /tmp/pairing_gui_v37_source.py
+      - name: Compile reconstructed application
+        run: |
+          python -m py_compile /tmp/pairing_gui_v37_source.py
+      - name: Verify v37 combine invariants
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path('/tmp/pairing_gui_v37_source.py').read_text(encoding='utf-8')
+          required = [
+              'APP_VERSION = "37.0"',
+              'def emit_progress(stage: str, **payload: Any) -> None:',
+              'Unrelated files beside a JSON remain where they are.',
+              'Unrelated files left untouched:',
+              'threading.Thread(target=worker, daemon=True).start()',
+              'preflight_callback=approve_preflight',
+              'if source in explicit_related or clear_name_match:',
+          ]
+          missing = [text for text in required if text not in source]
+          if missing:
+              raise SystemExit('Missing generated v37 invariants: ' + repr(missing))
+          forbidden = '''        if len(parent_plans) == 1:
+            plan = parent_plans[0]
+            for source in all_files:
+                if source in selected_archive_paths and source != plan["archive_path"]:
+                    continue
+                if source not in globally_assigned:
+                    plan["source_paths"].append(source)
+                    globally_assigned.add(source)
+            continue
+'''
+          if forbidden in source:
+              raise SystemExit('Unsafe whole-directory sibling adoption is still present')
+          print('v37 generated source invariants verified')
+          PY
