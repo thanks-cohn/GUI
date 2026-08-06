@@ -6,6 +6,7 @@ on:
     paths:
       - pairing_gui.py
       - combine_async_v37.py
+      - combine_close_guard_v37.py
       - gallery_pagination_v35.py
       - gallery_virtual_v36.py
       - .payload-v30/**
@@ -18,6 +19,7 @@ on:
     paths:
       - pairing_gui.py
       - combine_async_v37.py
+      - combine_close_guard_v37.py
       - gallery_pagination_v35.py
       - gallery_virtual_v36.py
       - .payload-v30/**
@@ -38,7 +40,7 @@ jobs:
           python-version: '3.14'
       - name: Compile launcher and source patches
         run: |
-          python -m py_compile pairing_gui.py combine_async_v37.py gallery_pagination_v35.py gallery_virtual_v36.py
+          python -m py_compile pairing_gui.py combine_async_v37.py combine_close_guard_v37.py gallery_pagination_v35.py gallery_virtual_v36.py
       - name: Reconstruct standalone v37 source
         run: |
           python pairing_gui.py --dump-source /tmp/pairing_gui_v37_source.py
@@ -59,6 +61,8 @@ jobs:
               'threading.Thread(target=worker, daemon=True).start()',
               'preflight_callback=approve_preflight',
               'if source in explicit_related or clear_name_match:',
+              'root.protocol("WM_DELETE_WINDOW", request_cancel)',
+              'root.protocol("WM_DELETE_WINDOW", close_gui)',
           ]
           missing = [text for text in required if text not in source]
           if missing:
