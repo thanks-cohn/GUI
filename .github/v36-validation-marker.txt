@@ -1,0 +1,1 @@
+Temporary marker used only to run the pull-request validation workflow against the v36 generated standalone source.
