@@ -1,0 +1,107 @@
+name: Validate GUI v36.1 table handoff
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - pairing_gui.py
+      - table_handoff_v36_1.py
+      - gallery_pagination_v35.py
+      - gallery_virtual_v36.py
+      - .payload-v30/**
+      - .payload-table3-v2/**
+      - .payload-bulkocr-v34/**
+      - table3_bulkocr_v33/**
+      - .github/workflows/validate-v36-1.yml
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  generated-source-and-handoff:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Compile launcher and patches
+        run: |
+          python -m py_compile pairing_gui.py table_handoff_v36_1.py gallery_pagination_v35.py gallery_virtual_v36.py
+      - name: Reconstruct and compile standalone application
+        run: |
+          python pairing_gui.py --dump-source /tmp/pairing_gui_v36_1_source.py
+          python -m py_compile /tmp/pairing_gui_v36_1_source.py
+      - name: Verify generated behavior
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path('/tmp/pairing_gui_v36_1_source.py').read_text(encoding='utf-8')
+          required = [
+              'APP_VERSION = "36.1"',
+              'TABLE_HANDOFF_MOST_RECENT = TABLE_HANDOFF_ROOT / "most_recent"',
+              'TABLE_HANDOFF_ARCHIVED = TABLE_HANDOFF_ROOT / "archived"',
+              'publish_bulkocr_table_handoff(',
+              'HANDOFF READY',
+              'if len(parent_plans) == 1:',
+              'plan["source_paths"].append(source)',
+          ]
+          missing = [item for item in required if item not in source]
+          if missing:
+              raise SystemExit('Missing generated v36.1 invariants: ' + repr(missing))
+          print('generated v36.1 invariants verified')
+          PY
+      - name: Exercise most_recent and per-run archives
+        env:
+          HOME: ${{ runner.temp }}/handoff-home
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          from table_handoff_v36_1 import _HANDOFF_HELPERS
+
+          namespace = {'Path': Path}
+          exec(compile(_HANDOFF_HELPERS, '<handoff-helpers>', 'exec'), namespace)
+          publish = namespace['publish_bulkocr_table_handoff']
+
+          root = Path.home()
+          source = root / 'source'
+          source.mkdir(parents=True)
+
+          old = root / 'tables' / 'most_recent'
+          old.mkdir(parents=True)
+          (old / 'old-run.txt').write_text('old', encoding='utf-8')
+
+          sqlite_one = source / 'run-one.sqlite3'
+          sql_one = source / 'run-one.sql'
+          session_one = source / 'run-one-session.json'
+          sqlite_one.write_bytes(b'SQLITE-ONE')
+          sql_one.write_text('SQL ONE', encoding='utf-8')
+          session_one.write_text('{}', encoding='utf-8')
+
+          current_one, archive_one = publish(sqlite_one, sql_one, session_one, 1)
+          assert current_one == root / 'tables' / 'most_recent'
+          assert (current_one / 'latest.sqlite3').read_bytes() == b'SQLITE-ONE'
+          assert (current_one / 'latest.sql').read_text(encoding='utf-8') == 'SQL ONE'
+          assert archive_one is not None
+          assert archive_one.parent == root / 'tables' / 'archived'
+          assert (archive_one / 'old-run.txt').read_text(encoding='utf-8') == 'old'
+
+          sqlite_two = source / 'run-two.sqlite3'
+          sql_two = source / 'run-two.sql'
+          session_two = source / 'run-two-session.json'
+          sqlite_two.write_bytes(b'SQLITE-TWO')
+          sql_two.write_text('SQL TWO', encoding='utf-8')
+          session_two.write_text('{"second": true}', encoding='utf-8')
+
+          current_two, archive_two = publish(sqlite_two, sql_two, session_two, 2)
+          assert (current_two / 'latest.sqlite3').read_bytes() == b'SQLITE-TWO'
+          assert archive_two is not None
+          assert archive_two.parent == root / 'tables' / 'archived'
+          assert (archive_two / 'latest.sqlite3').read_bytes() == b'SQLITE-ONE'
+
+          archives = sorted((root / 'tables' / 'archived').iterdir())
+          assert len(archives) == 2
+          assert all(item.is_dir() for item in archives)
+          print('most_recent replacement and per-run archives verified')
+          PY
