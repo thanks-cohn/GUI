@@ -59,6 +59,40 @@ jobs:
           PY
       - name: Dump and precompile standalone source
         run: python pairing_gui.py --dump-source /tmp/pairing_gui_v35_source.py
+      - name: Inspect generated drag, selection, and thumbnail code
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          source = Path('/tmp/pairing_gui_v35_source.py').read_text(encoding='utf-8')
+          lines = source.splitlines()
+          needles = (
+              'drag_state',
+              'def begin_',
+              'def start_',
+              'def on_drag',
+              'def drag_',
+              'SUBMIT SELECTED',
+              'candidate_selection_vars',
+              'thumbnail',
+              'PhotoImage',
+          )
+          hits = []
+          for index, line in enumerate(lines):
+              if any(needle in line for needle in needles):
+                  hits.append(index)
+          emitted = set()
+          for index in hits:
+              start = max(0, index - 8)
+              end = min(len(lines), index + 18)
+              key = (start, end)
+              if key in emitted:
+                  continue
+              emitted.add(key)
+              print(f'--- lines {start + 1}-{end} ---')
+              for lineno in range(start, end):
+                  print(f'{lineno + 1:05d}: {lines[lineno]}')
+          PY
       - name: Compile standalone source independently
         run: python -m py_compile /tmp/pairing_gui_v35_source.py
       - name: Verify pagination, wheel guard, and resumable BulkOCR studio
