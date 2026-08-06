@@ -13,63 +13,30 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.13'
-      - name: Compile launcher and pagination patch
-        run: python -m py_compile pairing_gui.py gallery_pagination_v35.py
-      - name: Test pagination patch against a synthetic gallery source
+
+      - name: Compile launcher and gallery patches
         run: |
-          python - <<'PY'
-          from gallery_pagination_v35 import apply
+          python -m py_compile \
+            pairing_gui.py \
+            gallery_pagination_v35.py \
+            gallery_virtual_v36.py
 
-          source = '''from typing import Any
-          from pathlib import Path
-
-          def launch_gui():
-              exact_json_card_frames: dict[tuple[str, str], "tk.Frame"] = {}
-              drag_state: dict[str, Any] = {"x": 1}
-              candidate_canvas, candidate_gallery = make_scroll_gallery(candidate_tab)
-              exact_canvas, exact_gallery = make_scroll_gallery(exact_tab)
-              combined_canvas, combined_gallery = make_scroll_gallery(combined_tab)
-
-              def scroll_archive_into_view(archive_file: str) -> None:
-                  """Bring a reassignment destination into view and briefly outline it."""
-                  pass
-
-              def jump_to_pairing_location(*, table_number: int, archive_file: str, json_file: str) -> None:
-                  """Switch tabs, scroll to the owning CBZ block, and highlight the JSON card."""
-                  if table_number == 2:
-                      pass
-                  else:
-                      pass
-
-              def populate_candidate_gallery(database_path: Path) -> tuple[int, int]:
-                  return 0, 0
-
-              def populate_exact_gallery(database_path: Path) -> tuple[int, int]:
-                  return 0, 0
-
-              def populate_combined_gallery(database_path: Path) -> tuple[int, int, int]:
-                  return 0, 0, 0
-          '''
-          patched = apply(source)
-          compile(patched, '<pagination-test>', 'exec')
-          assert 'PAIRING_PAGE_SIZE = 20' in patched
-          assert 'NEXT 20 ▶' in patched
-          assert patched.count('def populate_candidate_gallery') == 1
-          assert patched.count('def populate_exact_gallery') == 1
-          PY
       - name: Dump and precompile standalone source
-        run: python pairing_gui.py --dump-source /tmp/pairing_gui_v35_source.py
+        run: python pairing_gui.py --dump-source /tmp/pairing_gui_v36_source.py
+
       - name: Compile standalone source independently
-        run: python -m py_compile /tmp/pairing_gui_v35_source.py
-      - name: Verify pagination, wheel guard, and resumable BulkOCR studio
+        run: python -m py_compile /tmp/pairing_gui_v36_source.py
+
+      - name: Verify bounded expandable galleries and resumable BulkOCR studio
         run: |
           python - <<'PY'
           import re
           from pathlib import Path
 
-          path = Path('/tmp/pairing_gui_v35_source.py')
+          path = Path('/tmp/pairing_gui_v36_source.py')
           source = path.read_text(encoding='utf-8')
-          assert 'APP_VERSION = "35.0"' in source
+
+          assert 'APP_VERSION = "36.0"' in source
           assert re.search(
               r'(?m)^(?P<i>[ \t]*)try:\n'
               r'(?P=i)    target = root\.winfo_containing\(event\.x_root, event\.y_root\)\n'
@@ -77,16 +44,26 @@ jobs:
               r'(?P=i)    return$',
               source,
           ), 'wheel guard indentation is invalid'
-          for token in (
+
+          required = (
               'import tkinter as tk',
               'from tkinter import messagebox, ttk',
               'PAIRING_PAGE_SIZE = 20',
-              'def render_candidate_page()',
-              'def render_exact_page()',
-              '◀ PREVIOUS 20',
-              'NEXT 20 ▶',
-              'show_candidate_archive_page(archive_file)',
-              'show_exact_archive_page(archive_file)',
+              'PAIRING_LIVE_WINDOW_LIMIT = 60',
+              'candidate_window_start = 0',
+              'candidate_visible_count = PAIRING_PAGE_SIZE',
+              'candidate_selected_jsons',
+              'def sync_visible_candidate_selections()',
+              'def shift_candidate_window(',
+              'def shift_exact_window(',
+              'SHOW 20 MORE ▼',
+              '◀ SHOW 20 ABOVE',
+              'window_shift_pending',
+              'during_drag=True',
+              'append_pairing_journal(',
+              'replay_pairing_journal()',
+              '-pairing-session.jsonl',
+              'widgets capped at',
               'run_table3_bulkocr_export_studio',
               'ingest_ocr_records',
               '_v34_append_jsonl',
@@ -94,7 +71,44 @@ jobs:
               'ttk.Progressbar',
               'Run / Resume BulkOCR',
               "lf=tk.Frame(card,bg='#172124',padx=20,pady=0)",
-          ):
+          )
+          for token in required:
               assert token in source, token
-          assert "lf=tk.Frame(card,bg='#172124',padx=20,pady=(0,16))" not in source
+
+          forbidden = (
+              '◀ PREVIOUS 20',
+              'NEXT 20 ▶',
+              "lf=tk.Frame(card,bg='#172124',padx=20,pady=(0,16))",
+          )
+          for token in forbidden:
+              assert token not in source, token
+          PY
+
+      - name: Check bounded-window transition model
+        run: |
+          python - <<'PY'
+          batch = 20
+          limit = 60
+          total = 273
+          start = 0
+          visible = 20
+          observed = [(start, start + visible)]
+
+          for _ in range(5):
+              end = start + visible
+              if visible < limit:
+                  visible = min(limit, visible + batch, total - start)
+              elif end < total:
+                  start = min(total - visible, start + batch)
+              observed.append((start, min(total, start + visible)))
+
+          assert observed == [
+              (0, 20),
+              (0, 40),
+              (0, 60),
+              (20, 80),
+              (40, 100),
+              (60, 120),
+          ]
+          assert all(end - start <= limit for start, end in observed)
           PY
